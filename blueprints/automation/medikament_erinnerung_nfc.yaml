@@ -67,10 +67,12 @@ trigger:
 action:
   - choose:
 
+      ################################################
       # NFC → festen Wert setzen
+      ################################################
       - conditions:
-          - condition: trigger
-            platform: tag
+          - condition: template
+            value_template: "{{ trigger.platform == 'tag' }}"
         sequence:
           - service: counter.set_value
             target:
@@ -84,11 +86,14 @@ action:
                 💊 {{ !input med_name }} aufgefüllt auf
                 {{ states(!input auffuellwert) | int }} Tabletten
 
+      ################################################
       # Warnung bei niedrigem Bestand
+      ################################################
       - conditions:
           - condition: template
             value_template: >
-              {{ states(!input med_counter) | int
+              {{ trigger.platform == 'state' and
+                 states(!input med_counter) | int
                  <= states(!input warnwert) | int }}
         sequence:
           - service: notify.notify
@@ -96,12 +101,14 @@ action:
               title: "⚠️ Medikament fast leer"
               message: >
                 {{ !input med_name }}:
-                Nur noch {{ states(!input med_counter) | int }} Tabletten
+                Nur noch {{ states(!input med_counter) | int }} Tabletten übrig
 
+      ################################################
       # Erinnerung
+      ################################################
       - conditions:
-          - condition: trigger
-            platform: time
+          - condition: template
+            value_template: "{{ trigger.platform == 'time' }}"
         sequence:
           - service: notify.notify
             data:
@@ -140,4 +147,3 @@ action:
                   - service: notify.notify
                     data:
                       message: "⏰ Erinnerung: Medikament einnehmen"
-
