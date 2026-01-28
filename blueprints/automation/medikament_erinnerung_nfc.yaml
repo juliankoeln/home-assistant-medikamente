@@ -1,8 +1,5 @@
 blueprint:
-  name: 💊 Medikament Erinnerung (stabil)
-  description: >
-    Einfache und stabile Medikamentenerinnerung mit NFC-Auffüllen
-    und Warnung bei niedrigem Bestand.
+  name: 💊 Medikament Erinnerung (wirklich stabil)
   domain: automation
 
   input:
@@ -17,12 +14,10 @@ blueprint:
         entity:
           domain: counter
 
-    dosis:
-      name: Dosierung (Tabletten)
+    erinnerungszeit:
+      name: Einnahmezeit
       selector:
-        number:
-          min: 1
-          max: 10
+        time:
 
     warnwert:
       name: Warnschwelle
@@ -30,11 +25,6 @@ blueprint:
         number:
           min: 0
           max: 50
-
-    erinnerungszeit:
-      name: Einnahmezeit
-      selector:
-        time:
 
     nfc_tag:
       name: NFC Tag ID
@@ -60,7 +50,7 @@ mode: single
 action:
   - choose:
 
-      # NFC → auffüllen (+30)
+      # NFC → +30 Tabletten
       - conditions:
           - condition: trigger
             id: nfc
@@ -79,7 +69,7 @@ action:
           - service: notify.notify
             data:
               title: "⚠️ Medikament fast leer"
-              message: "Bitte {{ !input med_name }} nachkaufen!"
+              message: "Bitte Medikament nachkaufen"
 
       # Erinnerung
       - conditions:
@@ -88,16 +78,8 @@ action:
         sequence:
           - service: notify.notify
             data:
-              title: "💊 {{ !input med_name }}"
-              message: "Bitte {{ !input dosis }} Tablette(n) einnehmen"
-              data:
-                actions:
-                  - action: taken
-                    title: "Eingenommen"
-
-          - wait_for_trigger:
-              - platform: event
-                event_type: mobile_app_notification_action
+              title: "💊 Einnahme"
+              message: "Bitte Medikament einnehmen"
 
           - service: counter.decrement
             target:
