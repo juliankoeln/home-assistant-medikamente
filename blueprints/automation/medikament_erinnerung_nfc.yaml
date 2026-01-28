@@ -1,8 +1,8 @@
 blueprint:
-  name: 💊 Medikament Erinnerung (NFC + Warnung)
+  name: 💊 Medikament Erinnerung (stabil)
   description: >
-    Medikamentenverwaltung mit Erinnerung, NFC-Auffüllen,
-    Dosierung und Warnung bei niedrigem Bestand.
+    Einfache und stabile Medikamentenerinnerung mit NFC-Auffüllen
+    und Warnung bei niedrigem Bestand.
   domain: automation
 
   input:
@@ -18,28 +18,23 @@ blueprint:
           domain: counter
 
     dosis:
-      name: Dosierung
+      name: Dosierung (Tabletten)
       selector:
-        entity:
-          domain: input_number
+        number:
+          min: 1
+          max: 10
 
     warnwert:
       name: Warnschwelle
       selector:
-        entity:
-          domain: input_number
-
-    auffuellwert:
-      name: NFC Auffüllwert
-      selector:
-        entity:
-          domain: input_number
+        number:
+          min: 0
+          max: 50
 
     erinnerungszeit:
       name: Einnahmezeit
       selector:
-        entity:
-          domain: input_datetime
+        time:
 
     nfc_tag:
       name: NFC Tag ID
@@ -60,33 +55,23 @@ trigger:
     entity_id: !input med_counter
     below: !input warnwert
 
-mode: restart
+mode: single
 
 action:
   - choose:
 
-      ################################
-      # NFC → Bestand setzen
-      ################################
+      # NFC → auffüllen (+30)
       - conditions:
           - condition: trigger
             id: nfc
         sequence:
-          - service: counter.set_value
+          - service: counter.increment
             target:
               entity_id: !input med_counter
             data:
-              value: "{{ states(!input auffuellwert) | int }}"
+              count: 30
 
-          - service: notify.notify
-            data:
-              message: >
-                💊 {{ !input med_name }} aufgefüllt auf
-                {{ states(!input auffuellwert) | int }} Tabletten
-
-      ################################
       # Warnung
-      ################################
       - conditions:
           - condition: trigger
             id: warnung
@@ -94,13 +79,9 @@ action:
           - service: notify.notify
             data:
               title: "⚠️ Medikament fast leer"
-              message: >
-                {{ !input med_name }}:
-                nur noch {{ states(!input med_counter) | int }} Tabletten
+              message: "Bitte {{ !input med_name }} nachkaufen!"
 
-      ################################
       # Erinnerung
-      ################################
       - conditions:
           - condition: trigger
             id: erinnerung
@@ -108,39 +89,16 @@ action:
           - service: notify.notify
             data:
               title: "💊 {{ !input med_name }}"
-              message: >
-                Bitte einnehmen
-                ({{ states(!input dosis) | int }} Tabletten)
+              message: "Bitte {{ !input dosis }} Tablette(n) einnehmen"
               data:
                 actions:
                   - action: taken
                     title: "Eingenommen"
-                  - action: later
-                    title: "Später erinnern"
 
           - wait_for_trigger:
               - platform: event
                 event_type: mobile_app_notification_action
 
-          - choose:
-              - conditions:
-                  - condition: template
-                    value_template: >
-                      {{ wait.trigger.event.data.action == 'taken' }}
-                sequence:
-                  - repeat:
-                      count: "{{ states(!input dosis) | int }}"
-                      sequence:
-                        - service: counter.decrement
-                          target:
-                            entity_id: !input med_counter
-
-              - conditions:
-                  - condition: template
-                    value_template: >
-                      {{ wait.trigger.event.data.action == 'later' }}
-                sequence:
-                  - delay: "00:15:00"
-                  - service: notify.notify
-                    data:
-                      message: "⏰ Erinnerung: Medikament einnehmen"
+          - service: counter.decrement
+            target:
+              entity_id: !input med_counter
