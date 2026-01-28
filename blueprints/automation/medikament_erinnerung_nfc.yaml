@@ -1,6 +1,7 @@
 blueprint:
-  name: 💊 Medikament Erinnerung (wirklich stabil)
+  name: 💊 Medikament Erinnerung – Basis
   domain: automation
+  description: Erinnerung zur Medikamenteneinnahme
 
   input:
     med_name:
@@ -8,79 +9,17 @@ blueprint:
       selector:
         text:
 
-    med_counter:
-      name: Bestandszähler
-      selector:
-        entity:
-          domain: counter
-
     erinnerungszeit:
       name: Einnahmezeit
       selector:
         time:
 
-    warnwert:
-      name: Warnschwelle
-      selector:
-        number:
-          min: 0
-          max: 50
-
-    nfc_tag:
-      name: NFC Tag ID
-      selector:
-        text:
-
 trigger:
-  - id: erinnerung
-    platform: time
+  - platform: time
     at: !input erinnerungszeit
 
-  - id: nfc
-    platform: tag
-    tag_id: !input nfc_tag
-
-  - id: warnung
-    platform: numeric_state
-    entity_id: !input med_counter
-    below: !input warnwert
-
-mode: single
-
 action:
-  - choose:
-
-      # NFC → +30 Tabletten
-      - conditions:
-          - condition: trigger
-            id: nfc
-        sequence:
-          - service: counter.increment
-            target:
-              entity_id: !input med_counter
-            data:
-              count: 30
-
-      # Warnung
-      - conditions:
-          - condition: trigger
-            id: warnung
-        sequence:
-          - service: notify.notify
-            data:
-              title: "⚠️ Medikament fast leer"
-              message: "Bitte Medikament nachkaufen"
-
-      # Erinnerung
-      - conditions:
-          - condition: trigger
-            id: erinnerung
-        sequence:
-          - service: notify.notify
-            data:
-              title: "💊 Einnahme"
-              message: "Bitte Medikament einnehmen"
-
-          - service: counter.decrement
-            target:
-              entity_id: !input med_counter
+  - service: notify.notify
+    data:
+      title: "💊 Erinnerung"
+      message: "Bitte Medikament einnehmen"
