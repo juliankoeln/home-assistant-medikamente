@@ -1,7 +1,7 @@
 blueprint:
-  name: 💊 Medikament Erinnerung – stabil
+  name: 💊 Medikament Erinnerung stabil
   domain: automation
-  description: Stabiler Blueprint für Push aufs Handy
+  description: Erinnerung auf das gewählte Handy, ohne Templates
 
   input:
     med_name:
