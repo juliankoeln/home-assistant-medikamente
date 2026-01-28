@@ -1,0 +1,81 @@
+blueprint:
+  name: 💊 Medikamenten-Erinnerung – stabil
+  domain: automation
+  description: Erinnerung auf das Handy mit Counter, Buttons und Warnung
+
+  input:
+    med_name:
+      name: Medikamentenname
+      selector:
+        text:
+
+    med_counter:
+      name: Bestandszähler
+      selector:
+        entity:
+          domain: counter
+
+    dosis:
+      name: Dosierung pro Einnahme
+      selector:
+        number:
+          min: 1
+          max: 10
+
+    warnwert:
+      name: Warnschwelle
+      selector:
+        number:
+          min: 0
+          max: 50
+
+    erinnerungszeit:
+      name: Einnahmezeit
+      selector:
+        time:
+
+    notify_device:
+      name: Gerät für Benachrichtigung
+      selector:
+        device:
+          integration: mobile_app
+
+trigger:
+  - platform: time
+    at: !input erinnerungszeit
+
+mode: restart
+
+action:
+  # Push mit Buttons
+  - service: notify.mobile_app
+    data:
+      target:
+        - !input notify_device
+      title: "💊 Erinnerung"
+      message: !input med_name
+      data:
+        actions:
+          - action: taken
+            title: "Eingenommen"
+          - action: later
+            title: "Später erinnern"
+
+  # Warten auf Button
+  - wait_for_trigger:
+      - platform: event
+        event_type: mobile_app_notification_action
+
+  # Verarbeitung
+  - choose:
+      # Eingenommen → Counter abziehen
+      - conditions:
+          - condition: template
+            value_template: "{{ wait.trigger.event.data.action == 'taken' }}"
+        sequence:
+          - repeat:
+              count: !input dosis
+              sequence:
+                - service: counter.decrement
+                  target:
+                    entity_id: !input med_counter
