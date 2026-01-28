@@ -1,0 +1,38 @@
+blueprint:
+  name: 💊 Medikament Erinnerung – stabil
+  domain: automation
+  description: Erinnerung aufs Handy – Blueprint-kompatibel
+
+  input:
+    med_name:
+      name: Medikamentenname
+      selector:
+        text:
+
+    erinnerungszeit:
+      name: Einnahmezeit
+      selector:
+        time:
+
+    notify_device:
+      name: Gerät für Benachrichtigung
+      selector:
+        device:
+          integration: mobile_app
+
+trigger:
+  - platform: time
+    at: !input erinnerungszeit
+
+action:
+  - choose:
+      - conditions:
+          - condition: template
+            value_template: "{{ !input notify_device is not none }}"
+        sequence:
+          - service: notify.mobile_app
+            data:
+              target:
+                - !input notify_device
+              title: "💊 Erinnerung"
+              message: !input med_name
