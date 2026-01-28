@@ -1,8 +1,8 @@
 blueprint:
   name: 💊 Medikament Erinnerung (NFC + Warnung)
   description: >
-    Erinnerung zur Medikamenteneinnahme mit variabler Dosierung,
-    NFC-Auffüllen auf festen Wert und Warnung bei niedrigem Bestand.
+    Medikamentenverwaltung mit Erinnerung, NFC-Auffüllen,
+    Dosierung und Warnung bei niedrigem Bestand.
   domain: automation
 
   input:
@@ -18,7 +18,7 @@ blueprint:
           domain: counter
 
     dosis:
-      name: Dosierung (Tabletten pro Einnahme)
+      name: Dosierung
       selector:
         entity:
           domain: input_number
@@ -30,7 +30,7 @@ blueprint:
           domain: input_number
 
     auffuellwert:
-      name: Auffüllmenge (NFC)
+      name: NFC Auffüllwert
       selector:
         entity:
           domain: input_number
@@ -42,37 +42,35 @@ blueprint:
           domain: input_datetime
 
     nfc_tag:
-      name: NFC Tag
+      name: NFC Tag ID
       selector:
         text:
 
-    notify_device:
-      name: Smartphone
-      selector:
-        device:
-          integration: mobile_app
-
-mode: restart
-
 trigger:
-  - platform: time
+  - id: erinnerung
+    platform: time
     at: !input erinnerungszeit
 
-  - platform: tag
+  - id: nfc
+    platform: tag
     tag_id: !input nfc_tag
 
-  - platform: state
+  - id: warnung
+    platform: numeric_state
     entity_id: !input med_counter
+    below: !input warnwert
+
+mode: restart
 
 action:
   - choose:
 
-      ################################################
-      # NFC → festen Wert setzen
-      ################################################
+      ################################
+      # NFC → Bestand setzen
+      ################################
       - conditions:
-          - condition: template
-            value_template: "{{ trigger.platform == 'tag' }}"
+          - condition: trigger
+            id: nfc
         sequence:
           - service: counter.set_value
             target:
@@ -86,29 +84,26 @@ action:
                 💊 {{ !input med_name }} aufgefüllt auf
                 {{ states(!input auffuellwert) | int }} Tabletten
 
-      ################################################
-      # Warnung bei niedrigem Bestand
-      ################################################
+      ################################
+      # Warnung
+      ################################
       - conditions:
-          - condition: template
-            value_template: >
-              {{ trigger.platform == 'state' and
-                 states(!input med_counter) | int
-                 <= states(!input warnwert) | int }}
+          - condition: trigger
+            id: warnung
         sequence:
           - service: notify.notify
             data:
               title: "⚠️ Medikament fast leer"
               message: >
                 {{ !input med_name }}:
-                Nur noch {{ states(!input med_counter) | int }} Tabletten übrig
+                nur noch {{ states(!input med_counter) | int }} Tabletten
 
-      ################################################
+      ################################
       # Erinnerung
-      ################################################
+      ################################
       - conditions:
-          - condition: template
-            value_template: "{{ trigger.platform == 'time' }}"
+          - condition: trigger
+            id: erinnerung
         sequence:
           - service: notify.notify
             data:
@@ -130,7 +125,8 @@ action:
           - choose:
               - conditions:
                   - condition: template
-                    value_template: "{{ wait.trigger.event.data.action == 'taken' }}"
+                    value_template: >
+                      {{ wait.trigger.event.data.action == 'taken' }}
                 sequence:
                   - repeat:
                       count: "{{ states(!input dosis) | int }}"
@@ -141,7 +137,8 @@ action:
 
               - conditions:
                   - condition: template
-                    value_template: "{{ wait.trigger.event.data.action == 'later' }}"
+                    value_template: >
+                      {{ wait.trigger.event.data.action == 'later' }}
                 sequence:
                   - delay: "00:15:00"
                   - service: notify.notify
