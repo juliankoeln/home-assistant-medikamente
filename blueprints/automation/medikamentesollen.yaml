@@ -1,0 +1,105 @@
+blueprint:
+  name: 💊 Medikamenten-Erinnerung mit Bestand und Push
+  description: >
+    Erinnerung zur Einnahme, Counter für Bestand,
+    Button "Eingenommen", Warnung bei niedrigem Bestand.
+  domain: automation
+
+  input:
+    med_name:
+      name: Medikamentenname
+      selector:
+        text:
+
+    med_counter:
+      name: Bestandszähler
+      selector:
+        entity:
+          domain: counter
+
+    dosis:
+      name: Dosierung pro Einnahme
+      selector:
+        number:
+          min: 1
+          max: 10
+
+    warnwert:
+      name: Warnschwelle
+      selector:
+        number:
+          min: 0
+          max: 50
+
+    erinnerungszeit:
+      name: Einnahmezeit
+      selector:
+        time:
+
+    notify_device:
+      name: Gerät für Benachrichtigung
+      selector:
+        device:
+          integration: mobile_app
+
+trigger:
+  - platform: time
+    at: !input erinnerungszeit
+
+mode: restart
+
+action:
+  # Push-Erinnerung mit Buttons
+  - service: notify.mobile_app
+    data:
+      target:
+        - !input notify_device
+      title: "💊 {{ !input med_name }}"
+      message: "Bitte die Einnahme bestätigen"
+      data:
+        actions:
+          - action: taken
+            title: "Eingenommen"
+          - action: later
+            title: "Später erinnern"
+
+  # Warten auf Button-Klick
+  - wait_for_trigger:
+      - platform: event
+        event_type: mobile_app_notification_action
+
+  # Verarbeiten des Buttons
+  - choose:
+      # Eingenommen → Counter abziehen
+      - conditions:
+          - condition: template
+            value_template: "{{ wait.trigger.event.data.action == 'taken' }}"
+        sequence:
+          - repeat:
+              count: !input dosis
+              sequence:
+                - service: counter.decrement
+                  target:
+                    entity_id: !input med_counter
+
+      # Später erinnern → Push erneut nach 15 Minuten
+      - conditions:
+          - condition: template
+            value_template: "{{ wait.trigger.event.data.action == 'later' }}"
+        sequence:
+          - delay: "00:15:00"
+          - service: notify.mobile_app
+            data:
+              target:
+                - !input notify_device
+              title: "💊 Erinnerung"
+              message: "Bitte die Einnahme bestätigen"
+
+  # Warnung, falls Bestand niedrig
+  - condition: numeric_state
+    entity_id: !input med_counter
+    below: !input warnwert
+  - service: notify.notify
+    data:
+      title: "⚠️ Medikament fast leer"
+      message: "{{ !input med_name }} nur noch {{ states(!input med_counter) | int }} Tabletten"
