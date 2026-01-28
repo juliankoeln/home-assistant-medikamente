@@ -1,9 +1,7 @@
 blueprint:
-  name: 💊 Medikament Erinnerung (stabil)
-  description: >
-    Einfache und stabile Medikamentenerinnerung mit NFC-Auffüllen
-    und Warnung bei niedrigem Bestand.
+  name: 💊 Medikament Erinnerung mit Handy
   domain: automation
+  description: Erinnerung zur Medikamenteneinnahme auf das ausgewählte Gerät
 
   input:
     med_name:
@@ -11,94 +9,23 @@ blueprint:
       selector:
         text:
 
-    med_counter:
-      name: Bestandszähler
-      selector:
-        entity:
-          domain: counter
-
-    dosis:
-      name: Dosierung (Tabletten)
-      selector:
-        number:
-          min: 1
-          max: 10
-
-    warnwert:
-      name: Warnschwelle
-      selector:
-        number:
-          min: 0
-          max: 50
-
     erinnerungszeit:
       name: Einnahmezeit
       selector:
         time:
 
-    nfc_tag:
-      name: NFC Tag ID
+    notify_device:
+      name: Gerät für Benachrichtigung
       selector:
-        text:
+        device:
+          integration: mobile_app
 
 trigger:
-  - id: erinnerung
-    platform: time
+  - platform: time
     at: !input erinnerungszeit
 
-  - id: nfc
-    platform: tag
-    tag_id: !input nfc_tag
-
-  - id: warnung
-    platform: numeric_state
-    entity_id: !input med_counter
-    below: !input warnwert
-
-mode: single
-
 action:
-  - choose:
-
-      # NFC → auffüllen (+30)
-      - conditions:
-          - condition: trigger
-            id: nfc
-        sequence:
-          - service: counter.increment
-            target:
-              entity_id: !input med_counter
-            data:
-              count: 30
-
-      # Warnung
-      - conditions:
-          - condition: trigger
-            id: warnung
-        sequence:
-          - service: notify.notify
-            data:
-              title: "⚠️ Medikament fast leer"
-              message: "Bitte {{ !input med_name }} nachkaufen!"
-
-      # Erinnerung
-      - conditions:
-          - condition: trigger
-            id: erinnerung
-        sequence:
-          - service: notify.notify
-            data:
-              title: "💊 {{ !input med_name }}"
-              message: "Bitte {{ !input dosis }} Tablette(n) einnehmen"
-              data:
-                actions:
-                  - action: taken
-                    title: "Eingenommen"
-
-          - wait_for_trigger:
-              - platform: event
-                event_type: mobile_app_notification_action
-
-          - service: counter.decrement
-            target:
-              entity_id: !input med_counter
+  - service: notify.mobile_app_{{ device_attr(!input notify_device, 'name') | lower }}
+    data:
+      title: "💊 Erinnerung"
+      message: "Bitte {{ !input med_name }} einnehmen"
