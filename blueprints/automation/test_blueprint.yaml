@@ -1,14 +1,25 @@
 blueprint:
-  name: Test Blueprint
+  name: 💊 Medikament Erinnerung – Basis
   domain: automation
-  description: Minimaler Test
+  description: Erinnerung zur Medikamenteneinnahme
+
+  input:
+    med_name:
+      name: Medikamentenname
+      selector:
+        text:
+
+    erinnerungszeit:
+      name: Einnahmezeit
+      selector:
+        time:
 
 trigger:
   - platform: time
-    at: "12:00:00"
+    at: !input erinnerungszeit
 
 action:
-  - service: persistent_notification.create
+  - service: notify.notify
     data:
-      title: Test
-      message: Blueprint funktioniert
+      title: "💊 Erinnerung"
+      message: "Bitte Medikament einnehmen"
