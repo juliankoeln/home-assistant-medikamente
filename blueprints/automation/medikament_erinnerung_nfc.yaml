@@ -1,7 +1,7 @@
 blueprint:
-  name: 💊 Medikament Erinnerung mit Handy – stabil
+  name: 💊 Medikament Erinnerung – stabil
   domain: automation
-  description: Erinnerung zur Medikamenteneinnahme auf ein Gerät
+  description: Stabiler Blueprint für Push aufs Handy
 
   input:
     med_name:
@@ -24,11 +24,8 @@ trigger:
   - platform: time
     at: !input erinnerungszeit
 
-variables:
-  message_text: "Bitte {{ !input med_name }} einnehmen"
-
 action:
   - service: notify.mobile_app_{{ device_attr(!input notify_device, 'name') | lower }}
     data:
       title: "💊 Erinnerung"
-      message: "{{ message_text }}"
+      message: !input med_name
