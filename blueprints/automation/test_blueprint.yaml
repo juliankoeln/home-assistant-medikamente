@@ -1,0 +1,14 @@
+blueprint:
+  name: Test Blueprint
+  domain: automation
+  description: Minimaler Test
+
+trigger:
+  - platform: time
+    at: "12:00:00"
+
+action:
+  - service: persistent_notification.create
+    data:
+      title: Test
+      message: Blueprint funktioniert
