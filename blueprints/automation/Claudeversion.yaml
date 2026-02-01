@@ -1,0 +1,180 @@
+blueprint:
+  name: 💊 Medikamenten-Erinnerung (optimiert mit Push claude)
+  description: Erinnerung zur Einnahme, Counter, Warnung und Push auf das Handy
+  domain: automation
+  input:
+    med_name:
+      name: Medikamentenname
+      selector:
+        text:
+          placeholder: "z.B. Vitamin D"
+    
+    med_counter:
+      name: Bestandszähler
+      selector:
+        entity:
+          domain: counter
+    
+    dosis:
+      name: Dosierung pro Einnahme
+      selector:
+        number:
+          min: 1
+          max: 10
+          mode: box
+    
+    warnwert:
+      name: Warnschwelle
+      description: Benachrichtigung wenn Bestand unter diesen Wert fällt
+      selector:
+        number:
+          min: 0
+          max: 50
+          mode: box
+    
+    erinnerungszeit:
+      name: Einnahmezeit
+      selector:
+        time:
+    
+    notify_service:
+      name: Notify-Service
+      description: "z.B. notify.mobile_app_julians_robotoro"
+      selector:
+        text:
+          placeholder: "notify.mobile_app_dein_handy"
+    
+    dashboard_url:
+      name: Dashboard-Pfad (für Push clickAction)
+      description: "z.B. /lovelace/0 oder /lovelace/medikamente"
+      default: "/lovelace/0"
+      selector:
+        text:
+          placeholder: "/lovelace/0"
+    
+    reminder_timeout:
+      name: Erinnerungs-Timeout
+      description: Wie lange auf Reaktion warten (in Minuten)
+      default: 60
+      selector:
+        number:
+          min: 15
+          max: 240
+          mode: box
+          unit_of_measurement: "min"
+    
+    snooze_duration:
+      name: Snooze-Dauer (Später)
+      description: Wiederholung nach X Minuten
+      default: 15
+      selector:
+        number:
+          min: 5
+          max: 60
+          mode: box
+          unit_of_measurement: "min"
+
+trigger:
+  - platform: time
+    at: !input erinnerungszeit
+
+mode: restart
+
+action:
+  # 1. Prüfen ob überhaupt noch Medikamente da sind
+  - condition: numeric_state
+    entity_id: !input med_counter
+    above: 0
+  
+  # 2. Erste Push-Benachrichtigung mit clickAction
+  - service: !input notify_service
+    data:
+      title: "💊 Medikamenten-Erinnerung"
+      message: "{{ med_name }} einnehmen"
+      data:
+        clickAction: !input dashboard_url
+        actions:
+          - action: "taken"
+            title: "✅ Genommen"
+          - action: "later"
+            title: "⏰ Später"
+    variables:
+      med_name: !input med_name
+  
+  # 3. Auf Button-Klick warten (mit Timeout)
+  - wait_for_trigger:
+      - platform: event
+        event_type: mobile_app_notification_action
+        event_data:
+          action: "taken"
+      - platform: event
+        event_type: mobile_app_notification_action
+        event_data:
+          action: "later"
+    timeout:
+      minutes: !input reminder_timeout
+    continue_on_timeout: true
+  
+  # 4. Reaktion auswerten
+  - choose:
+      # Fall A: Genommen
+      - conditions:
+          - condition: template
+            value_template: "{{ wait.trigger is not none and wait.trigger.event.data.action == 'taken' }}"
+        sequence:
+          # Prüfen ob genug Vorrat für Dosis vorhanden
+          - condition: numeric_state
+            entity_id: !input med_counter
+            above: !input dosis
+          
+          # Counter um Dosis reduzieren
+          - repeat:
+              count: !input dosis
+              sequence:
+                - service: counter.decrement
+                  target:
+                    entity_id: !input med_counter
+          
+          # Bestätigung senden
+          - service: !input notify_service
+            data:
+              title: "✅ Einnahme bestätigt"
+              message: "{{ med_name }} - Verbleibend: {{ states(med_counter) }}"
+              data:
+                clickAction: !input dashboard_url
+            variables:
+              med_counter: !input med_counter
+      
+      # Fall B: Später erinnern
+      - conditions:
+          - condition: template
+            value_template: "{{ wait.trigger is not none and wait.trigger.event.data.action == 'later' }}"
+        sequence:
+          - delay:
+              minutes: !input snooze_duration
+          
+          - service: !input notify_service
+            data:
+              title: "💊 Erinnerung (Wiederholung)"
+              message: "{{ med_name }} - Bitte jetzt einnehmen"
+              data:
+                clickAction: !input dashboard_url
+                actions:
+                  - action: "taken"
+                    title: "✅ Genommen"
+  
+  # 5. Warnung bei niedrigem Bestand (unabhängig von vorheriger Aktion)
+  - condition: numeric_state
+    entity_id: !input med_counter
+    below: !input warnwert
+  
+  - service: !input notify_service
+    data:
+      title: "⚠️ Medikament nachbestellen"
+      message: "{{ med_name }} - Nur noch {{ states(med_counter) }} Stück!"
+      data:
+        clickAction: !input dashboard_url
+        tag: "low_stock_{{ med_name }}"
+        priority: high
+    variables:
+      med_counter: !input med_counter
