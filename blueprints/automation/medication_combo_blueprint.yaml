@@ -1,4 +1,4 @@
-blueprint:
+iblueprint:
   name: 💊 Medikamenten-Kombi (3 Tabletten)
   description: Erinnerung für 3 verschiedene Medikamente die zusammen eingenommen werden
   domain: automation
@@ -193,7 +193,7 @@ action:
         Tippe zum Öffnen des Dashboards
       data:
         clickAction: !input dashboard_url
-        url: !input dashboard_url
+        url: !input medikamente
         notification_icon: "mdi:pill-multiple"
   
   # Auf Reaktion warten
