@@ -1,0 +1,338 @@
+blueprint:
+  name: 💊 Medikamenten-Kombi (3 Tabletten)
+  description: Erinnerung für 3 verschiedene Medikamente die zusammen eingenommen werden
+  domain: automation
+  input:
+    kombi_name:
+      name: Name der Kombination
+      description: "z.B. Morgen-Tabletten oder Abend-Tabletten"
+      selector:
+        text:
+    
+    # Medikament 1
+    med_counter_1:
+      name: Bestandszähler Medikament 1
+      selector:
+        entity:
+          domain: counter
+    
+    med_name_1:
+      name: Name Medikament 1
+      description: "z.B. Vitamin D"
+      selector:
+        text:
+    
+    dosis_1:
+      name: Dosierung Medikament 1
+      selector:
+        number:
+          min: 0.5
+          max: 10
+          step: 0.5
+          mode: box
+    
+    # Medikament 2
+    med_counter_2:
+      name: Bestandszähler Medikament 2
+      selector:
+        entity:
+          domain: counter
+    
+    med_name_2:
+      name: Name Medikament 2
+      description: "z.B. Magnesium"
+      selector:
+        text:
+    
+    dosis_2:
+      name: Dosierung Medikament 2
+      selector:
+        number:
+          min: 0.5
+          max: 10
+          step: 0.5
+          mode: box
+    
+    # Medikament 3
+    med_counter_3:
+      name: Bestandszähler Medikament 3
+      selector:
+        entity:
+          domain: counter
+    
+    med_name_3:
+      name: Name Medikament 3
+      description: "z.B. Omega 3"
+      selector:
+        text:
+    
+    dosis_3:
+      name: Dosierung Medikament 3
+      selector:
+        number:
+          min: 0.5
+          max: 10
+          step: 0.5
+          mode: box
+    
+    # Gemeinsame Einstellungen
+    warnwert:
+      name: Warnschwelle
+      description: Warnung wenn EINES der Medikamente unter diesen Wert fällt
+      selector:
+        number:
+          min: 0
+          max: 50
+          mode: box
+    
+    erinnerungszeit:
+      name: Einnahmezeit 1
+      selector:
+        time:
+    
+    zweite_erinnerung_aktiv:
+      name: Zweite Erinnerung aktivieren?
+      description: "Soll es eine zweite Einnahmezeit geben?"
+      default: false
+      selector:
+        boolean:
+    
+    erinnerungszeit_2:
+      name: Einnahmezeit 2
+      description: "Nur relevant wenn 'Zweite Erinnerung' aktiviert ist"
+      default: "12:00:00"
+      selector:
+        time:
+    
+    notify_service:
+      name: Benachrichtigungs-Gerät
+      selector:
+        select:
+          options:
+            - label: "Julians Robotoro"
+              value: "notify.mobile_app_julians_robotoro"
+            - label: "Alle Geräte"
+              value: "notify.notify"
+          mode: dropdown
+    
+    dashboard_url:
+      name: Dashboard-Pfad
+      description: "z.B. /lovelace/medikamente"
+      default: "/lovelace/medikamente"
+      selector:
+        text:
+    
+    reminder_timeout:
+      name: Erinnerungs-Timeout (Minuten)
+      default: 60
+      selector:
+        number:
+          min: 15
+          max: 240
+          mode: box
+          unit_of_measurement: "min"
+    
+    snooze_duration:
+      name: Snooze-Dauer (Minuten)
+      default: 15
+      selector:
+        number:
+          min: 5
+          max: 60
+          mode: box
+          unit_of_measurement: "min"
+
+trigger:
+  - platform: time
+    at: !input erinnerungszeit
+    id: "zeit_1"
+  - platform: time
+    at: !input erinnerungszeit_2
+    id: "zeit_2"
+    enabled: !input zweite_erinnerung_aktiv
+
+mode: restart
+
+action:
+  # Variables definieren
+  - variables:
+      kombi_name: !input kombi_name
+      med_counter_1: !input med_counter_1
+      med_counter_2: !input med_counter_2
+      med_counter_3: !input med_counter_3
+      med_name_1: !input med_name_1
+      med_name_2: !input med_name_2
+      med_name_3: !input med_name_3
+      dosis_1: !input dosis_1
+      dosis_2: !input dosis_2
+      dosis_3: !input dosis_3
+  
+  # Prüfen ob von allen Medikamenten noch was da ist
+  - condition: and
+    conditions:
+      - condition: numeric_state
+        entity_id: !input med_counter_1
+        above: 0
+      - condition: numeric_state
+        entity_id: !input med_counter_2
+        above: 0
+      - condition: numeric_state
+        entity_id: !input med_counter_3
+        above: 0
+  
+  # Push-Benachrichtigung mit allen 3 Medikamenten
+  - service: !input notify_service
+    data:
+      title: "💊 {{ kombi_name }}"
+      message: |
+        📋 Einnahme:
+        • {{ med_name_1 }} ({{ dosis_1 }} Tbl.)
+        • {{ med_name_2 }} ({{ dosis_2 }} Tbl.)
+        • {{ med_name_3 }} ({{ dosis_3 }} Tbl.)
+        
+        Tippe zum Öffnen des Dashboards
+      data:
+        clickAction: !input dashboard_url
+        url: !input dashboard_url
+        notification_icon: "mdi:pill-multiple"
+  
+  # Auf Reaktion warten
+  - wait_for_trigger:
+      - platform: event
+        event_type: mobile_app_notification_action
+        event_data:
+          action: "taken"
+      - platform: event
+        event_type: mobile_app_notification_action
+        event_data:
+          action: "later"
+    timeout:
+      minutes: !input reminder_timeout
+    continue_on_timeout: true
+  
+  # Reaktion auswerten
+  - choose:
+      # Fall A: Alle genommen
+      - conditions:
+          - condition: template
+            value_template: "{{ wait.trigger is not none and wait.trigger.event.data.action == 'taken' }}"
+        sequence:
+          # Prüfen ob genug Vorrat vorhanden
+          - condition: and
+            conditions:
+              - condition: numeric_state
+                entity_id: !input med_counter_1
+                above: !input dosis_1
+              - condition: numeric_state
+                entity_id: !input med_counter_2
+                above: !input dosis_2
+              - condition: numeric_state
+                entity_id: !input med_counter_3
+                above: !input dosis_3
+          
+          # Medikament 1 Counter reduzieren
+          - repeat:
+              count: "{{ (dosis_1 * 2) | int }}"
+              sequence:
+                - service: counter.decrement
+                  target:
+                    entity_id: !input med_counter_1
+          
+          # Medikament 2 Counter reduzieren
+          - repeat:
+              count: "{{ (dosis_2 * 2) | int }}"
+              sequence:
+                - service: counter.decrement
+                  target:
+                    entity_id: !input med_counter_2
+          
+          # Medikament 3 Counter reduzieren
+          - repeat:
+              count: "{{ (dosis_3 * 2) | int }}"
+              sequence:
+                - service: counter.decrement
+                  target:
+                    entity_id: !input med_counter_3
+          
+          # Bestätigung senden
+          - service: !input notify_service
+            data:
+              title: "✅ Einnahme bestätigt"
+              message: |
+                {{ kombi_name }} eingenommen!
+                
+                Verbleibend:
+                • {{ med_name_1 }}: {{ (states(med_counter_1) | float / 2) }} Tbl.
+                • {{ med_name_2 }}: {{ (states(med_counter_2) | float / 2) }} Tbl.
+                • {{ med_name_3 }}: {{ (states(med_counter_3) | float / 2) }} Tbl.
+              data:
+                clickAction: !input dashboard_url
+                url: !input dashboard_url
+                notification_icon: "mdi:check-circle"
+      
+      # Fall B: Später
+      - conditions:
+          - condition: template
+            value_template: "{{ wait.trigger is not none and wait.trigger.event.data.action == 'later' }}"
+        sequence:
+          - delay:
+              minutes: !input snooze_duration
+          
+          - service: !input notify_service
+            data:
+              title: "💊 Erinnerung: {{ kombi_name }}"
+              message: "Bitte jetzt einnehmen!"
+              data:
+                clickAction: !input dashboard_url
+                url: !input dashboard_url
+                notification_icon: "mdi:pill-multiple"
+  
+  # Warnung bei niedrigem Bestand (eines der Medikamente)
+  - choose:
+      - conditions:
+          - condition: numeric_state
+            entity_id: !input med_counter_1
+            below: !input warnwert
+        sequence:
+          - service: !input notify_service
+            data:
+              title: "⚠️ Medikament nachbestellen"
+              message: "{{ med_name_1 }} - Nur noch {{ (states(med_counter_1) | float / 2) }} Tabletten!"
+              data:
+                clickAction: !input dashboard_url
+                url: !input dashboard_url
+                tag: "low_stock_1"
+                priority: high
+                notification_icon: "mdi:alert"
+      
+      - conditions:
+          - condition: numeric_state
+            entity_id: !input med_counter_2
+            below: !input warnwert
+        sequence:
+          - service: !input notify_service
+            data:
+              title: "⚠️ Medikament nachbestellen"
+              message: "{{ med_name_2 }} - Nur noch {{ (states(med_counter_2) | float / 2) }} Tabletten!"
+              data:
+                clickAction: !input dashboard_url
+                url: !input dashboard_url
+                tag: "low_stock_2"
+                priority: high
+                notification_icon: "mdi:alert"
+      
+      - conditions:
+          - condition: numeric_state
+            entity_id: !input med_counter_3
+            below: !input warnwert
+        sequence:
+          - service: !input notify_service
+            data:
+              title: "⚠️ Medikament nachbestellen"
+              message: "{{ med_name_3 }} - Nur noch {{ (states(med_counter_3) | float / 2) }} Tabletten!"
+              data:
+                clickAction: !input dashboard_url
+                url: !input dashboard_url
+                tag: "low_stock_3"
+                priority: high
+                notification_icon: "mdi:alert"
