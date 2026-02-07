@@ -242,4 +242,99 @@ action:
           
           # Medikament 2 Counter reduzieren
           - repeat:
-              count: "{{
+              count: "{{ (dosis_2 * 2) | int }}"
+              sequence:
+                - service: counter.decrement
+                  target:
+                    entity_id: !input med_counter_2
+          
+          # Medikament 3 Counter reduzieren
+          - repeat:
+              count: "{{ (dosis_3 * 2) | int }}"
+              sequence:
+                - service: counter.decrement
+                  target:
+                    entity_id: !input med_counter_3
+          
+          # Bestätigung senden
+          - service: !input notify_service
+            data:
+              title: "✅ Einnahme bestätigt"
+              message: |
+                {{ kombi_name }} eingenommen!
+                
+                Verbleibend:
+                • {{ med_name_1 }}: {{ (states(med_counter_1) | float / 2) }} Tbl.
+                • {{ med_name_2 }}: {{ (states(med_counter_2) | float / 2) }} Tbl.
+                • {{ med_name_3 }}: {{ (states(med_counter_3) | float / 2) }} Tbl.
+              data:
+                clickAction: !input dashboard_url
+                url: !input dashboard_url
+                notification_icon: "mdi:check-circle"
+      
+      # Fall B: Später
+      - conditions:
+          - condition: template
+            value_template: "{{ wait.trigger is not none and wait.trigger.event.data.action == 'later' }}"
+        sequence:
+          - delay:
+              minutes: !input snooze_duration
+          
+          - service: !input notify_service
+            data:
+              title: "💊 Erinnerung: {{ kombi_name }}"
+              message: "Bitte jetzt einnehmen!"
+              data:
+                clickAction: !input dashboard_url
+                url: !input dashboard_url
+                notification_icon: "mdi:pill-multiple"
+  
+  # Warnung bei niedrigem Bestand (eines der Medikamente)
+  - choose:
+      - conditions:
+          - condition: numeric_state
+            entity_id: !input med_counter_1
+            below: !input warnwert
+        sequence:
+          - service: !input notify_service
+            data:
+              title: "⚠️ Medikament nachbestellen"
+              message: "{{ med_name_1 }} - Nur noch {{ (states(med_counter_1) | float / 2) }} Tabletten!"
+              data:
+                clickAction: !input dashboard_url
+                url: !input dashboard_url
+                tag: "low_stock_1"
+                priority: high
+                notification_icon: "mdi:alert"
+      
+      - conditions:
+          - condition: numeric_state
+            entity_id: !input med_counter_2
+            below: !input warnwert
+        sequence:
+          - service: !input notify_service
+            data:
+              title: "⚠️ Medikament nachbestellen"
+              message: "{{ med_name_2 }} - Nur noch {{ (states(med_counter_2) | float / 2) }} Tabletten!"
+              data:
+                clickAction: !input dashboard_url
+                url: !input dashboard_url
+                tag: "low_stock_2"
+                priority: high
+                notification_icon: "mdi:alert"
+      
+      - conditions:
+          - condition: numeric_state
+            entity_id: !input med_counter_3
+            below: !input warnwert
+        sequence:
+          - service: !input notify_service
+            data:
+              title: "⚠️ Medikament nachbestellen"
+              message: "{{ med_name_3 }} - Nur noch {{ (states(med_counter_3) | float / 2) }} Tabletten!"
+              data:
+                clickAction: !input dashboard_url
+                url: !input dashboard_url
+                tag: "low_stock_3"
+                priority: high
+                notification_icon: "mdi:alert"
