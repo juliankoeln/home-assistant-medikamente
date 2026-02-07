@@ -111,6 +111,8 @@ iblueprint:
           options:
             - label: "Julians Robotoro"
               value: "notify.mobile_app_julians_robotoro"
+            - label: "Mi Phone"
+              value: "notify.mobile_app_iphone_8"
             - label: "Alle Geräte"
               value: "notify.notify"
           mode: dropdown
