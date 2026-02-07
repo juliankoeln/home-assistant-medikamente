@@ -1,4 +1,4 @@
-iblueprint:
+blueprint:
   name: 💊 Medikamenten-Kombi (3 Tabletten)
   description: Erinnerung für 3 verschiedene Medikamente die zusammen eingenommen werden
   domain: automation
